@@ -921,7 +921,10 @@ router.get('/track', async (req, res) => {
   }
 
   // Get the visitor's IP address
-  const userIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
+  const userIp = req.headers["x-forwarded-for"] 
+    ? req.headers["x-forwarded-for"].split(',')[0] // Use the first IP in the list
+    : req.connection.remoteAddress;
+
   
   console.log('Campaign ID:', campaignId);
   console.log('User ID:', userId);
