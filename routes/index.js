@@ -913,6 +913,7 @@ router.post("/getWalletDetails", async (req, res) => {
 
 router.get('/track', async (req, res) => {
   // Get the query parameters: sourceUrl, campaignId, userId
+  console.log('Track route accessed');
   const { sourceUrl, campaignId, userId } = req.query;
 
   if (!sourceUrl || !campaignId || !userId) {
