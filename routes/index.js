@@ -912,11 +912,7 @@ router.post("/getWalletDetails", async (req, res) => {
 
 
 router.get('/track', async (req, res) => {
-  // Log all incoming headers to inspect them
-  console.log("Start Track route ");
-
-  console.log('Incoming Headers:', req.headers);
-  
+  // Get the query parameters: sourceUrl, campaignId, userId
   const { sourceUrl, campaignId, userId } = req.query;
 
   if (!sourceUrl || !campaignId || !userId) {
@@ -924,12 +920,12 @@ router.get('/track', async (req, res) => {
   }
 
   // Get the visitor's IP address
-  const userIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
-  const ip = userIp.split(',')[0]; // Get the first IP in the list
+  const userIp = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
+  // Log the IP and other details
   console.log('Campaign ID:', campaignId);
   console.log('User ID:', userId);
-  console.log('Visitor IP Address:', ip);
+  console.log('Visitor IP Address:', userIp);
   console.log('Source URL:', sourceUrl);
 
   res.send({
@@ -937,7 +933,8 @@ router.get('/track', async (req, res) => {
     campaignId,
     userId,
     sourceUrl,
-    userIp: ip
+    userIp
   });
 });
+
 module.exports = router;
