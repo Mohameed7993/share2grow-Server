@@ -920,7 +920,7 @@ router.get('/track', async (req, res) => {
   }
 
   // Get the visitor's IP address
-  const userIp = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  const userIp =req.headers['true-client-ip'] || req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
   // Log the IP and other details
   console.log('Campaign ID:', campaignId);
