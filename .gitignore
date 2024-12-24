@@ -6,6 +6,8 @@ yarn-debug.log*
 yarn-error.log*
 firebase-debug.log*
 firebase-debug.*.log*
+share2g-f8466-firebase-adminsdk-gp6k0-17252ae42a.json
+.env
 
 # Firebase cache
 .firebase/
