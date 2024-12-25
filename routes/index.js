@@ -916,6 +916,10 @@ router.get('/track', async (req, res) => {
   console.log("start tracking")
   console.log(req.query);
   const { sourceUrl, campaignId, userId } = req.query;
+  console.log(1+campaignId)
+  console.log(2+sourceUrl)
+  console.log(3+userId)
+
 
   if (!sourceUrl || !campaignId || !userId) {
     return res.status(400).send("Missing required parameters");
