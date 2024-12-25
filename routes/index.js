@@ -910,33 +910,176 @@ router.post("/getWalletDetails", async (req, res) => {
   }
 });
 
+function decodeQueryParams(encodedParams) {
+  try {
+      const decodedData = Buffer.from(encodedParams, 'base64').toString('utf-8'); // Decode from Base64
+      return JSON.parse(decodedData); // Parse the JSON string back into an object
+  } catch (error) {
+      throw new Error("Failed to decode parameters");
+  }
+}
+
+
 
 router.get('/track', async (req, res) => {
-  // Get the query parameters: sourceUrl, campaignId, userId
-  console.log("start tracking")
-  const { sourceUrl, campaignId, userId } = req.query;
+  // Get the query parameter for encoded data
+  const encodedData = req.query.data;
 
-  if (!sourceUrl || !campaignId || !userId) {
-    return res.status(400).send("Missing required parameters");
+  if (!encodedData) {
+      return res.status(400).send("Missing 'data' parameter");
   }
-  console.log(req.headers)
 
-  // Get the visitor's IP address
-  const userIp =req.headers['true-client-ip'] || req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  try {
+      // Decode the data (you would use your decodeQueryParams function here)
+      const decodedParams = decodeQueryParams(encodedData);
+      const { sourceUrl, campaignId, userId } = decodedParams;
 
-  // Log the IP and other details
-  console.log('Campaign ID:', campaignId);
-  console.log('User ID:', userId);
-  console.log('Visitor IP Address:', userIp);
-  console.log('Source URL:', sourceUrl);
+      console.log("Decoded Params:", decodedParams);
 
-  res.send({
-    message: 'Parameters received and IP logged successfully',
-    campaignId,
-    userId,
-    userIp,
-    sourceUrl,
-  });
+      if (!sourceUrl || !campaignId || !userId) {
+          return res.status(400).send("Missing required parameters in the decoded data");
+      }
+
+      // Get Firestore reference
+      const campaignDocRef = doc(db, 'campaigns', campaignId);
+      const userDocRef = doc(db, 'users', userId);
+
+      // Fetch the campaign document to update the used_ip array
+      const campaignDocSnapshot = await getDoc(campaignDocRef);
+      if (!campaignDocSnapshot.exists()) {
+          return res.status(404).send("Campaign not found");
+      }
+
+      // Fetch the user document to update the joinedCampaigns array
+      const userDocSnapshot = await getDoc(userDocRef);
+      if (!userDocSnapshot.exists()) {
+          return res.status(404).send("User not found");
+      }
+
+      // Get the visitor's IP address and user-agent
+      const userIp = req.headers['true-client-ip'] || req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      // Log the details
+      console.log('Campaign ID:', campaignId);
+      console.log('User ID:', userId);
+      console.log('Visitor IP Address:', userIp);
+      console.log('Source URL:', sourceUrl);
+      console.log('User-Agent:', userAgent);
+
+      // Get the current used_ip array from the campaign document
+      const usedIpArray = campaignDocSnapshot.data().used_ip || [];
+
+      // Check if the IP and user-agent are in the used_ip array
+      const ipFound = usedIpArray.includes(userIp);
+      const userAgentFound = usedIpArray.includes(userAgent);
+
+      // If both are not found, add them and increment collectedShares
+      if (!ipFound && !userAgentFound) {
+          await updateDoc(campaignDocRef, {
+              used_ip: arrayUnion(userIp, userAgent)
+          });
+          
+          // Increment the collectedShares field in the user's joinedCampaigns array
+          await updateCollectedShares(userDocRef, campaignId);
+      }
+      // If IP is found but user-agent is not, add user-agent and increment collectedShares
+      else if (ipFound && !userAgentFound) {
+          await updateDoc(campaignDocRef, {
+              used_ip: arrayUnion(userAgent)
+          });
+          
+          // Increment the collectedShares field in the user's joinedCampaigns array
+          await updateCollectedShares(userDocRef, campaignId);
+      }
+
+      // Redirect to the source URL
+      res.redirect(sourceUrl);
+
+  } catch (error) {
+      console.error("Error processing request:", error);
+      res.status(500).send("Error processing the request");
+  }
 });
+
+// Helper function to increment collectedShares in the user's joinedCampaigns
+async function updateCollectedShares(userDocRef, campaignId) {
+    const userDocSnapshot = await getDoc(userDocRef);
+    const joinedCampaigns = userDocSnapshot.data().joinedCampaigns || [];
+    const campaignIndex = joinedCampaigns.findIndex(campaign => campaign.campaignId === campaignId);
+
+    if (campaignIndex !== -1) {
+        // Increment the collectedShares field in the campaign for this user
+        joinedCampaigns[campaignIndex].collectedShares += 1;
+
+        // Update the user document with the incremented collectedShares
+        await updateDoc(userDocRef, {
+            joinedCampaigns: joinedCampaigns
+        });
+    }
+}
+
+
+// router.get('/track', (req, res) => {
+//   const encodedData = req.query.data;
+//   console.log(req.query);
+//   console.log(req.params);
+
+//   if (!encodedData) {
+//       return res.status(400).send("Missing 'data' parameter");
+//   }
+
+//   try {
+//       // Decode and parse the data
+//       const decodedParams = decodeQueryParams(encodedData);
+
+//       // Log the decoded parameters
+//       console.log("Decoded Params:", decodedParams);
+
+//       // Example usage of the parameters
+//       const { sourceUrl, campaignId, userId } = decodedParams;
+//       console.log("Source URL:", sourceUrl);
+//       console.log("Campaign ID:", campaignId);
+//       console.log("User ID:", userId);
+
+//       // Log and count the click if necessary
+//       console.log(`Redirecting to Source URL: ${sourceUrl}`);
+//       // Here you can add logic to record the click in the database
+
+//       // Redirect the user to the sourceUrl
+//       res.redirect(sourceUrl);
+//   } catch (error) {
+//       console.error("Error decoding data:", error);
+//       res.status(400).send("Invalid 'data' parameter");
+//   }
+// });
+
+// router.get('/track', async (req, res) => {
+//   // Get the query parameters: sourceUrl, campaignId, userId
+//   console.log("start tracking")
+//   const { sourceUrl, campaignId, userId } = req.query;
+
+//   if (!sourceUrl || !campaignId || !userId) {
+//     return res.status(400).send("Missing required parameters");
+//   }
+//   console.log(req.headers)
+
+//   // Get the visitor's IP address
+//   const userIp =req.headers['true-client-ip'] || req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+//   // Log the IP and other details
+//   console.log('Campaign ID:', campaignId);
+//   console.log('User ID:', userId);
+//   console.log('Visitor IP Address:', userIp);
+//   console.log('Source URL:', sourceUrl);
+
+//   res.send({
+//     message: 'Parameters received and IP logged successfully',
+//     campaignId,
+//     userId,
+//     userIp,
+//     sourceUrl,
+//   });
+// });
 
 module.exports = router;
