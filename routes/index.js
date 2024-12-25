@@ -913,20 +913,23 @@ router.post("/getWalletDetails", async (req, res) => {
 
 router.get('/track', async (req, res) => {
   // Get the query parameters: sourceUrl, campaignId, userId
+  console.log("start tracking")
+  console.log(req.query);
   const { sourceUrl, campaignId, userId } = req.query;
 
   if (!sourceUrl || !campaignId || !userId) {
     return res.status(400).send("Missing required parameters");
   }
+  console.log(req.headers)
 
   // Get the visitor's IP address
-  const userIp =req.headers['true-client-ip'] || req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  // const userIp =req.headers['true-client-ip'] || req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
-  // Log the IP and other details
-  console.log('Campaign ID:', campaignId);
-  console.log('User ID:', userId);
-  console.log('Visitor IP Address:', userIp);
-  console.log('Source URL:', sourceUrl);
+  // // Log the IP and other details
+  // console.log('Campaign ID:', campaignId);
+  // console.log('User ID:', userId);
+  // console.log('Visitor IP Address:', userIp);
+  // console.log('Source URL:', sourceUrl);
 
   res.send({
     message: 'Parameters received and IP logged successfully',
