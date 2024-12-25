@@ -936,7 +936,6 @@ router.get('/track', async (req, res) => {
     campaignId,
     userId,
     sourceUrl,
-    userIp
   });
 });
 
