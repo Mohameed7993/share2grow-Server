@@ -960,7 +960,6 @@ router.get('/track', async (req, res) => {
       const userIp = req.headers['true-client-ip'] || req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
       const userAgent = req.headers['user-agent'];
 
-      // Log the details
       console.log('Campaign ID:', campaignId);
       console.log('User ID:', userId);
       console.log('Visitor IP Address:', userIp);
@@ -970,26 +969,27 @@ router.get('/track', async (req, res) => {
       // Get the current used_ip array from the campaign document
       const usedIpArray = campaignDocSnapshot.data().used_ip || [];
 
-      // Check if the IP and user-agent are in the used_ip array
-      const ipFound = usedIpArray.includes(userIp);
-      const userAgentFound = usedIpArray.includes(userAgent);
+      // Check if the IP is already in the used_ip array
+      const ipEntry = usedIpArray.find(entry => entry.ip === userIp);
 
-      // If both are not found, add them and increment collectedShares
-      if (!ipFound && !userAgentFound) {
+      if (ipEntry) {
+          // If the IP is found, check if the user-agent is in the IP's array
+          if (!ipEntry.userAgents.includes(userAgent)) {
+              // Add the user-agent if it's not found and increment collectedShares
+              await updateDoc(campaignDocRef, {
+                  used_ip: arrayUnion({ ip: userIp, userAgents: arrayUnion(userAgent) })
+              });
+
+              // Increment collectedShares for the user
+              await updateCollectedShares(userDocRef, campaignId);
+          }
+      } else {
+          // If IP is not found, add the IP and the user-agent to the used_ip array
           await updateDoc(campaignDocRef, {
-              used_ip: arrayUnion(userIp, userAgent)
+              used_ip: arrayUnion({ ip: userIp, userAgents: [userAgent] })
           });
-          
-          // Increment the collectedShares field in the user's joinedCampaigns array
-          await updateCollectedShares(userDocRef, campaignId);
-      }
-      // If IP is found but user-agent is not, add user-agent and increment collectedShares
-      else if (ipFound && !userAgentFound) {
-          await updateDoc(campaignDocRef, {
-              used_ip: arrayUnion(userAgent)
-          });
-          
-          // Increment the collectedShares field in the user's joinedCampaigns array
+
+          // Increment collectedShares for the user
           await updateCollectedShares(userDocRef, campaignId);
       }
 
@@ -1018,6 +1018,7 @@ async function updateCollectedShares(userDocRef, campaignId) {
         });
     }
 }
+
 
 
 // router.get('/track', (req, res) => {
