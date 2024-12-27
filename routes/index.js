@@ -922,7 +922,6 @@ function decodeQueryParams(encodedParams) {
 
 
 router.get('/track', async (req, res) => {
-  // Get the query parameter for encoded data
   const encodedData = req.query.data;
 
   if (!encodedData) {
@@ -930,66 +929,60 @@ router.get('/track', async (req, res) => {
   }
 
   try {
-      // Decode the data (you would use your decodeQueryParams function here)
+      // Decode the query parameter
       const decodedParams = decodeQueryParams(encodedData);
       const { sourceUrl, campaignId, userId } = decodedParams;
-
-      console.log("Decoded Params:", decodedParams);
 
       if (!sourceUrl || !campaignId || !userId) {
           return res.status(400).send("Missing required parameters in the decoded data");
       }
 
-      // Get Firestore reference
       const campaignDocRef = doc(db, 'campaigns', campaignId);
       const userDocRef = doc(db, 'users', userId);
 
-      // Fetch the campaign document to update the used_ip array
       const campaignDocSnapshot = await getDoc(campaignDocRef);
       if (!campaignDocSnapshot.exists()) {
           return res.status(404).send("Campaign not found");
       }
 
-      // Fetch the user document to update the joinedCampaigns array
       const userDocSnapshot = await getDoc(userDocRef);
       if (!userDocSnapshot.exists()) {
           return res.status(404).send("User not found");
       }
 
-      // Get the visitor's IP address and user-agent
       const userIp = req.headers['true-client-ip'] || req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
       const userAgent = req.headers['user-agent'];
 
-      console.log('Campaign ID:', campaignId);
-      console.log('User ID:', userId);
-      console.log('Visitor IP Address:', userIp);
-      console.log('Source URL:', sourceUrl);
-      console.log('User-Agent:', userAgent);
+      let usedIpArray = campaignDocSnapshot.data().used_ip || [];
 
-      // Get the current used_ip array from the campaign document
-      const usedIpArray = campaignDocSnapshot.data().used_ip || [];
+      // Find the IP entry in the array
+      const ipEntryIndex = usedIpArray.findIndex(entry => entry.ip === userIp);
 
-      // Check if the IP is already in the used_ip array
-      const ipEntry = usedIpArray.find(entry => entry.ip === userIp);
+      if (ipEntryIndex !== -1) {
+          // IP exists, check if the user-agent is in the userAgents array
+          const userAgents = usedIpArray[ipEntryIndex].userAgents || [];
+          if (!userAgents.includes(userAgent)) {
+              // Add the new user-agent to the userAgents array
+              usedIpArray[ipEntryIndex].userAgents.push(userAgent);
 
-      if (ipEntry) {
-          // If the IP is found, check if the user-agent is in the IP's array
-          if (!ipEntry.userAgents.includes(userAgent)) {
-              // Add the user-agent if it's not found and increment collectedShares
+              // Update the Firestore document
               await updateDoc(campaignDocRef, {
-                  used_ip: arrayUnion({ ip: userIp, userAgents: arrayUnion(userAgent) })
+                  used_ip: usedIpArray
               });
 
-              // Increment collectedShares for the user
+              // Increment collectedShares
               await updateCollectedShares(userDocRef, campaignId);
           }
       } else {
-          // If IP is not found, add the IP and the user-agent to the used_ip array
+          // IP does not exist, add the IP and user-agent
+          usedIpArray.push({ ip: userIp, userAgents: [userAgent] });
+
+          // Update the Firestore document
           await updateDoc(campaignDocRef, {
-              used_ip: arrayUnion({ ip: userIp, userAgents: [userAgent] })
+              used_ip: usedIpArray
           });
 
-          // Increment collectedShares for the user
+          // Increment collectedShares
           await updateCollectedShares(userDocRef, campaignId);
       }
 
@@ -1004,20 +997,18 @@ router.get('/track', async (req, res) => {
 
 // Helper function to increment collectedShares in the user's joinedCampaigns
 async function updateCollectedShares(userDocRef, campaignId) {
-    const userDocSnapshot = await getDoc(userDocRef);
-    const joinedCampaigns = userDocSnapshot.data().joinedCampaigns || [];
-    const campaignIndex = joinedCampaigns.findIndex(campaign => campaign.campaignId === campaignId);
+  const userDocSnapshot = await getDoc(userDocRef);
+  const joinedCampaigns = userDocSnapshot.data().joinedCampaigns || [];
+  const campaignIndex = joinedCampaigns.findIndex(campaign => campaign.campaignId === campaignId);
 
-    if (campaignIndex !== -1) {
-        // Increment the collectedShares field in the campaign for this user
-        joinedCampaigns[campaignIndex].collectedShares += 1;
-
-        // Update the user document with the incremented collectedShares
-        await updateDoc(userDocRef, {
-            joinedCampaigns: joinedCampaigns
-        });
-    }
+  if (campaignIndex !== -1) {
+      joinedCampaigns[campaignIndex].collectedShares += 1;
+      await updateDoc(userDocRef, {
+          joinedCampaigns: joinedCampaigns
+      });
+  }
 }
+
 
 
 
